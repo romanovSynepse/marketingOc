@@ -1,4 +1,4 @@
-const API = "https://functions.poehali.dev/6cab9cd5-93c3-4c92-b04c-f1aba47059b8";
+const API = import.meta.env.VITE_API_URL ?? "https://functions.poehali.dev/6cab9cd5-93c3-4c92-b04c-f1aba47059b8";
 
 async function request(resource: string, method = "GET", body?: unknown, id?: number | string) {
   const url = new URL(API);
