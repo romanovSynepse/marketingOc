@@ -1,0 +1,31 @@
+# Прод-надстройка над docker-compose.yml: наружу смотрит только Caddy (HTTPS + пароль).
+# docker compose -f docker-compose.yml -f deploy/docker-compose.prod.yml --env-file deploy/.env up -d --build
+services:
+  postgres:
+    ports: !reset []
+  backend:
+    ports: !reset []
+  frontend:
+    ports: !reset []
+    build:
+      args:
+        VITE_API_URL: https://${DOMAIN}/api
+  caddy:
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
+      AUTH_USER: ${AUTH_USER}
+      AUTH_HASH: ${AUTH_HASH}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    depends_on:
+      - frontend
+      - backend
+
+volumes:
+  caddy_data:
