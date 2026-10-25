@@ -1,0 +1,15 @@
+# Для сервера, где уже есть nginx на 80/443: стек слушает только localhost,
+# наружу отдаёт существующий nginx (deploy/nginx-marketer.conf).
+# docker compose -p marketingoc -f docker-compose.yml -f deploy/docker-compose.existing.yml up -d --build
+services:
+  postgres:
+    ports: !reset []
+  backend:
+    ports: !override
+      - "127.0.0.1:8810:8000"
+  frontend:
+    ports: !override
+      - "127.0.0.1:8811:80"
+    build:
+      args:
+        VITE_API_URL: https://${DOMAIN:-marketer.syneps.ai}/api
