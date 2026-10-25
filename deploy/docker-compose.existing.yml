@@ -12,4 +12,4 @@ services:
       - "127.0.0.1:8811:80"
     build:
       args:
-        VITE_API_URL: https://${DOMAIN:-marketer.syneps.ai}/api
+        VITE_API_URL: https://${DOMAIN:-marketer.syneps.ai}/api/

@@ -2,7 +2,9 @@
 	basic_auth {
 		{$AUTH_USER} {$AUTH_HASH}
 	}
-	handle_path /api/* {
+	# /api и /api/... → бэкенд (фронт шлёт /api/?resource=..., но /api?resource=... тоже ловим)
+	handle /api* {
+		uri strip_prefix /api
 		reverse_proxy backend:8000
 	}
 	handle {
