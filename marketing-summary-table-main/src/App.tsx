@@ -11,6 +11,7 @@ import Analytics from "./pages/Analytics";
 import Content from "./pages/Content";
 import Research from "./pages/Research";
 import Data from "./pages/Data";
+import MoneyMaker from "./pages/MoneyMaker";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -30,6 +31,7 @@ const App = () => (
           <Route path="/research" element={<Research />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="/data" element={<Data />} />
+          <Route path="/money" element={<MoneyMaker />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

@@ -101,6 +101,13 @@ export default function Index() {
                 <Icon name="Database" size={13} />
                 Данные
               </button>
+              <button
+                onClick={() => navigate("/money")}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground rounded-md hover:bg-muted transition-colors whitespace-nowrap"
+              >
+                <Icon name="Coins" size={13} />
+                Money Maker
+              </button>
             </nav>
             {/* Settings gear — вне nav чтобы дропдаун не обрезался */}
             <div className="relative flex-shrink-0" ref={settingsRef}>
