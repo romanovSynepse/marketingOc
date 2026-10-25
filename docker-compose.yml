@@ -38,5 +38,15 @@ services:
     depends_on:
       - backend
 
+  traffic-team:
+    build: ./traffic-team
+    env_file: ./traffic-team/.env
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/marketingoc
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles: ["autopilot"]   # запуск: docker compose --profile autopilot up -d
+
 volumes:
   pgdata:

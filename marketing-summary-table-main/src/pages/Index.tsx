@@ -67,6 +67,13 @@ export default function Index() {
                 Основное
               </button>
               <button
+                onClick={() => navigate("/traffic")}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground rounded-md hover:bg-muted transition-colors whitespace-nowrap"
+              >
+                <Icon name="Zap" size={13} />
+                Traffic HQ
+              </button>
+              <button
                 onClick={() => navigate("/analytics")}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground rounded-md hover:bg-muted transition-colors whitespace-nowrap"
               >

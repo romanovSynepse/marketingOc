@@ -12,6 +12,23 @@ CORS_HEADERS = {
     'Access-Control-Allow-Headers': 'Content-Type',
 }
 
+# resource -> (таблица, колонки, которые можно писать с фронта, сортировка)
+TRAFFIC_TABLES = {
+    'content-items': ('content_items', {
+        'channel', 'account', 'format', 'rubric', 'language', 'hook', 'body', 'cta', 'visual_brief',
+        'pattern', 'source_url', 'utm_url', 'status', 'scheduled_at'}, 'created_at DESC'),
+    'traffic-activities': ('traffic_activities', {
+        'date', 'channel', 'activity', 'campaign', 'utm_url', 'cost', 'reach', 'clicks', 'leads',
+        'signups', 'payments', 'revenue', 'notes'}, 'date DESC, id DESC'),
+    'channel-daily': ('channel_daily', {
+        'date', 'channel', 'account', 'followers', 'views', 'reach', 'engagement', 'profile_visits',
+        'link_clicks'}, 'date DESC'),
+    'outreach-leads': ('outreach_leads', {
+        'brand', 'website', 'segment', 'fit_score', 'why_fit', 'contact', 'subject', 'message', 'status',
+        'sender_account'}, 'fit_score DESC, created_at DESC'),
+    'agent-runs': ('agent_runs', set(), 'created_at DESC'),
+}
+
 def get_conn():
     return psycopg2.connect(os.environ['DATABASE_URL'])
 
@@ -335,6 +352,56 @@ def handler(event: dict, context) -> dict:
                 cur.execute("DELETE FROM data_imports WHERE id=%s", (rid,))
                 conn.commit()
                 return ok({'deleted': True})
+
+        # ── TRAFFIC TEAM (очередь контента, оцифровка, каналы, аутрич) ─────────
+        if resource in TRAFFIC_TABLES:
+            table, cols, order = TRAFFIC_TABLES[resource]
+            if method == 'GET':
+                status = qs.get('status')
+                if status and 'status' in cols:
+                    cur.execute(f"SELECT * FROM {table} WHERE status=%s ORDER BY {order} LIMIT 500", (status,))
+                else:
+                    cur.execute(f"SELECT * FROM {table} ORDER BY {order} LIMIT 500")
+                return ok(rows_to_list(cur))
+            fields = {k: v for k, v in body.items() if k in cols}
+            if method == 'POST':
+                cur.execute(
+                    f"INSERT INTO {table} ({','.join(fields)}) VALUES ({','.join(['%s'] * len(fields))}) RETURNING *",
+                    list(fields.values())
+                )
+                conn.commit()
+                return ok(one_row(cur))
+            if method == 'PUT':
+                if not fields:
+                    return err('no fields to update')
+                cur.execute(
+                    f"UPDATE {table} SET {','.join(f'{k}=%s' for k in fields)} WHERE id=%s RETURNING *",
+                    [*fields.values(), rid]
+                )
+                conn.commit()
+                return ok(one_row(cur))
+            if method == 'DELETE':
+                cur.execute(f"DELETE FROM {table} WHERE id=%s", (rid,))
+                conn.commit()
+                return ok({'deleted': True})
+
+        if resource == 'traffic-summary':
+            days = int(qs.get('days', 30))
+            cur.execute("""
+                SELECT channel, COUNT(*) activities, SUM(cost) cost, SUM(reach) reach, SUM(clicks) clicks,
+                       SUM(leads) leads, SUM(signups) signups, SUM(payments) payments, SUM(revenue) revenue
+                FROM traffic_activities WHERE date >= CURRENT_DATE - %s
+                GROUP BY channel ORDER BY SUM(reach) DESC NULLS LAST""", (days,))
+            funnel = rows_to_list(cur)
+            cur.execute("SELECT channel, status, COUNT(*) n FROM content_items GROUP BY channel, status")
+            queue = rows_to_list(cur)
+            cur.execute("""
+                SELECT channel, account, SUM(views) views, SUM(engagement) engagement,
+                       SUM(link_clicks) link_clicks, MAX(followers) followers
+                FROM channel_daily WHERE date >= CURRENT_DATE - %s
+                GROUP BY channel, account ORDER BY SUM(views) DESC NULLS LAST""", (days,))
+            channels = rows_to_list(cur)
+            return ok({'funnel': funnel, 'queue': queue, 'channels': channels})
 
         return err('resource not found', 404)
 

@@ -12,6 +12,7 @@ import Content from "./pages/Content";
 import Research from "./pages/Research";
 import Data from "./pages/Data";
 import NotFound from "./pages/NotFound";
+import Traffic from "./pages/Traffic";
 
 const queryClient = new QueryClient();
 
@@ -28,6 +29,7 @@ const App = () => (
           <Route path="/analytics" element={<Analytics />} />
           <Route path="/content" element={<Content />} />
           <Route path="/research" element={<Research />} />
+          <Route path="/traffic" element={<Traffic />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="/data" element={<Data />} />
           <Route path="*" element={<NotFound />} />
