@@ -13,13 +13,38 @@ LOCK=/var/lock/marketingoc-autodeploy.lock
 SELF="$DIR/deploy/autodeploy.sh"
 CRON_LINE="*/5 * * * * bash $SELF >> $LOG 2>&1"
 COMPOSE=(docker compose -f docker-compose.yml -f deploy/docker-compose.prod.yml --env-file deploy/.env)
+MIGRATIONS=marketing-summary-table-main/db_migrations
 
 log() { echo "[$(date '+%F %T')] $*"; }
 
+# Автопилот агентов включается сам, как только в traffic-team/.env появился ключ Anthropic
+autopilot_enabled() {
+  [ -f traffic-team/.env ] && grep -Eq '^ANTHROPIC_API_KEY=.+' traffic-team/.env
+}
+
+# Начальные миграции (V0001–V0003) Postgres применяет сам при первом старте.
+# Начиная с V0004 они идемпотентные, поэтому прогоняем их на каждом деплое.
+migrate() {
+  local f version out
+  for f in "$MIGRATIONS"/V*.sql; do
+    version=$(basename "$f" | sed -E 's/^V0*([0-9]+)__.*/\1/')
+    [ "$version" -ge 4 ] || continue
+    # при ошибке деплой останавливается и не пишет новый хэш: /healthz покажет старый коммит
+    if ! out=$("${COMPOSE[@]}" exec -T postgres psql -q -v ON_ERROR_STOP=1 -U postgres -d marketingoc < "$f" 2>&1); then
+      log "migration $(basename "$f") FAILED: $(grep -v NOTICE <<<"$out")"
+      return 1
+    fi
+    log "migration $(basename "$f") ok"
+  done
+}
+
 deploy() {
   local restart_caddy="$1"
-  log "docker compose up -d --build"
+  local autopilot=no
+  if autopilot_enabled; then COMPOSE+=(--profile autopilot); autopilot=yes; fi
+  log "docker compose up -d --build (autopilot: $autopilot)"
   "${COMPOSE[@]}" up -d --build --remove-orphans
+  migrate
   if [ "$restart_caddy" = yes ]; then
     # Caddyfile смонтирован файлом: после git pull у него новый inode, нужен рестарт, а не reload
     log "restart caddy"

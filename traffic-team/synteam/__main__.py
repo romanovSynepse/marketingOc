@@ -6,7 +6,7 @@ import time
 from datetime import datetime
 
 from . import publisher
-from .agents import analyst, outreach, scout, strategist, writer
+from .agents import analyst, outreach, rewrite, scout, strategist, writer
 from .integrations import telegram
 
 
@@ -62,6 +62,26 @@ def cmd_outreach(a):
             print(f"#{lead['id']} {lead['brand']}: fit {lead['fit_score']} | {lead['subject']}")
 
 
+def cmd_rw(a):
+    if a.action == "add":
+        text = open(a.file, encoding="utf-8").read() if a.file else a.text
+        src = rewrite.add_source(a.url, text, a.channels, a.lang)
+        print(f"Источник #{src['id']} добавлен. Дальше: python -m synteam rw tick (или подождать автопилот)")
+    elif a.action == "tick":
+        for e in rewrite.tick():
+            print(e)
+            if a.telegram:
+                telegram.notify(e)
+    elif a.action == "analyze":
+        _print(rewrite.analyze(a.id))
+    elif a.action == "experiment":
+        print(f"Эксперимент #{rewrite.start_experiment(a.id, a.variants)}")
+    elif a.action == "evaluate":
+        _print(rewrite.evaluate(a.id))
+    elif a.action == "scale":
+        print(f"Масштаб → эксперимент #{rewrite.scale(a.id, a.count)}")
+
+
 def cmd_worker(a):
     """Простой планировщик без зависимостей: план утром, публикация каждые 15 минут, метрики ночью."""
     done = set()
@@ -75,6 +95,8 @@ def cmd_worker(a):
             if now.hour == 3 and ("sync", key) not in done:
                 publisher.sync_threads_metrics()
                 done.add(("sync", key))
+            for event in rewrite.tick():
+                telegram.notify(event)
             for r in publisher.publish_due():
                 telegram.notify(f"✅ Threads #{r['id']}: {r.get('permalink')}" if r["ok"]
                                 else f"⚠️ Threads #{r['id']}: {r['error']}")
@@ -116,6 +138,19 @@ def main():
     s.add_argument("--lang", default="RU")
     s.add_argument("--account", default="nickromanov")
     s.set_defaults(fn=cmd_rewrite)
+
+    s = sub.add_parser("rw", help="Rewrite Agent: оригинал → разбор → эксперимент хуков → победитель → масштаб")
+    s.add_argument("action", choices=["add", "tick", "analyze", "experiment", "evaluate", "scale"])
+    s.add_argument("--url", default="")
+    s.add_argument("--text", default="")
+    s.add_argument("--file")
+    s.add_argument("--id", type=int, help="id источника (analyze, experiment) или эксперимента (evaluate, scale)")
+    s.add_argument("--channels", default="threads,instagram_reels")
+    s.add_argument("--variants", type=int, default=4)
+    s.add_argument("--count", type=int, default=6)
+    s.add_argument("--lang", default="RU")
+    s.add_argument("--telegram", action="store_true")
+    s.set_defaults(fn=cmd_rw)
 
     s = sub.add_parser("publish", help="Опубликовать одобренное в Threads")
     s.set_defaults(fn=cmd_publish)

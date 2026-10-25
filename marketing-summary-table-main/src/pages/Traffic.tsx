@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import Icon from "@/components/ui/icon";
 import { api } from "@/api";
+import { RewriteTab } from "@/components/traffic/RewriteTab";
 
 // Синий акцент Syneps (как на доске продукта)
 const SYN_BLUE = "#2f80ff";
@@ -22,6 +23,7 @@ type Lead = { id: number; brand: string; website: string | null; fit_score: numb
 
 const TABS = [
   { id: "queue", label: "Очередь", icon: "Inbox" },
+  { id: "rewrite", label: "Rewrite", icon: "Repeat2" },
   { id: "funnel", label: "Оцифровка", icon: "GitBranch" },
   { id: "channels", label: "Каналы", icon: "BarChart3" },
   { id: "outreach", label: "Аутрич", icon: "Send" },
@@ -219,6 +221,8 @@ export default function Traffic() {
                 d.date, CHANNEL_LABEL[d.channel] ?? d.channel, d.account, d.followers ? fmt(d.followers) : "—", fmt(d.views), fmt(d.reach), fmt(d.engagement)])} />
           </section>
         )}
+
+        {tab === "rewrite" && <RewriteTab />}
 
         {tab === "outreach" && (
           <section className="grid gap-3 md:grid-cols-2">

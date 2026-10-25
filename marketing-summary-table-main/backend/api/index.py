@@ -27,6 +27,9 @@ TRAFFIC_TABLES = {
         'brand', 'website', 'segment', 'fit_score', 'why_fit', 'contact', 'subject', 'message', 'status',
         'sender_account'}, 'fit_score DESC, created_at DESC'),
     'agent-runs': ('agent_runs', set(), 'created_at DESC'),
+    'rewrite-sources': ('rewrite_sources', {
+        'url', 'original_text', 'channels', 'language', 'status'}, 'created_at DESC'),
+    'experiments': ('experiments', {'status'}, 'created_at DESC'),
 }
 
 def get_conn():
@@ -384,6 +387,25 @@ def handler(event: dict, context) -> dict:
                 cur.execute(f"DELETE FROM {table} WHERE id=%s", (rid,))
                 conn.commit()
                 return ok({'deleted': True})
+
+        if resource == 'experiments-board':
+            # эксперименты с вариантами и последними метриками каждого варианта
+            cur.execute("""
+                SELECT e.*, s.url AS source_url, s.author AS source_author, s.score AS source_score
+                FROM experiments e LEFT JOIN rewrite_sources s ON s.id = e.source_id
+                ORDER BY e.created_at DESC LIMIT 50""")
+            exps = rows_to_list(cur)
+            cur.execute("""
+                SELECT c.id, c.experiment_id, c.variant, c.channel, c.hook, c.status, c.permalink,
+                       m.views, m.likes, m.replies, m.reposts, m.shares, m.saves
+                FROM content_items c
+                LEFT JOIN LATERAL (SELECT * FROM content_metrics WHERE content_id = c.id
+                                   ORDER BY collected_at DESC LIMIT 1) m ON true
+                WHERE c.experiment_id IS NOT NULL ORDER BY c.variant""")
+            variants = rows_to_list(cur)
+            for e in exps:
+                e['variants'] = [v for v in variants if v['experiment_id'] == e['id']]
+            return ok(exps)
 
         if resource == 'traffic-summary':
             days = int(qs.get('days', 30))
