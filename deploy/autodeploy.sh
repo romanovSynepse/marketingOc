@@ -26,6 +26,8 @@ deploy() {
     "${COMPOSE[@]}" restart caddy
   fi
   docker image prune -f >/dev/null
+  mkdir -p deploy/state
+  git rev-parse HEAD > deploy/state/commit
   log "deploy done at $(git rev-parse --short HEAD)"
 }
 
@@ -66,7 +68,14 @@ case "${1:-run}" in
     log "update ${local_rev:0:7} -> ${remote_rev:0:7}"
     changed=$(git diff --name-only "$local_rev" "$remote_rev")
     git pull --ff-only --quiet
-    if grep -qx 'deploy/Caddyfile' <<<"$changed"; then deploy yes; else deploy no; fi
+    caddy=no
+    if grep -qx 'deploy/Caddyfile' <<<"$changed"; then caddy=yes; fi
+    # деплоим логикой из только что подтянутой версии скрипта (lock переоткроется в новом процессе)
+    exec 9>&-
+    exec bash "$SELF" _deploy "$caddy"
+    ;;
+  _deploy)
+    deploy "${2:-no}"
     ;;
   *)
     echo "usage: $0 [install|run|force]" >&2

@@ -4,6 +4,9 @@ services:
   postgres:
     ports: !reset []
   backend:
+    volumes:
+      - ./deploy/state:/state:ro
+      - ./.git:/repo-git:ro
     ports: !reset []
   frontend:
     ports: !reset []

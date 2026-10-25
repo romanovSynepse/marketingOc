@@ -5,6 +5,9 @@ services:
   postgres:
     ports: !reset []
   backend:
+    volumes:
+      - ./deploy/state:/state:ro
+      - ./.git:/repo-git:ro
     ports: !override
       - "127.0.0.1:8810:8000"
   frontend:
