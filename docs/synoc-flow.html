@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>SynOC — Reels Pipeline: документация разработчика</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 18mm 16mm; }
+  :root { --ink:#1b1f24; --muted:#5b6470; --line:#dde1e6; --accent:#2b59c3; --ok:#1f8a4c; --warn:#b7791f; --no:#c0392b; --bg:#f5f7fa; }
+  * { box-sizing: border-box; }
+  body { font-family: Inter, "DejaVu Sans", sans-serif; color: var(--ink); font-size: 10pt; line-height: 1.5; margin: 0; background: #fff; }
+  h1 { font-size: 22pt; margin: 0 0 4pt; letter-spacing: -0.3px; }
+  h2 { font-size: 14pt; margin: 22pt 0 8pt; padding-bottom: 4pt; border-bottom: 2px solid var(--ink); break-after: avoid; }
+  h3 { font-size: 11pt; margin: 14pt 0 5pt; break-after: avoid; }
+  p { margin: 0 0 6pt; }
+  ul { margin: 0 0 6pt; padding-left: 16pt; }
+  li { margin-bottom: 2pt; }
+  code, pre { font-family: "DejaVu Sans Mono", monospace; font-size: 8.5pt; }
+  code { background: var(--bg); padding: 0 3px; border-radius: 3px; }
+  pre { background: var(--bg); border: 1px solid var(--line); border-radius: 5px; padding: 7pt 9pt; white-space: pre-wrap; margin: 4pt 0 8pt; break-inside: avoid; }
+  table { width: 100%; border-collapse: collapse; margin: 4pt 0 10pt; font-size: 9pt; break-inside: avoid; }
+  th, td { border: 1px solid var(--line); padding: 4pt 6pt; vertical-align: top; text-align: left; }
+  th { background: var(--bg); font-weight: 600; }
+  tr { break-inside: avoid; }
+  .meta { color: var(--muted); font-size: 9pt; }
+  .cover { border-bottom: 3px solid var(--accent); padding-bottom: 10pt; margin-bottom: 10pt; }
+  .ok { color: var(--ok); font-weight: 600; }
+  .warn { color: var(--warn); font-weight: 600; }
+  .no { color: var(--no); font-weight: 600; }
+  .box { border: 1px solid var(--line); border-left: 4px solid var(--accent); background: var(--bg); padding: 7pt 10pt; margin: 6pt 0 10pt; border-radius: 4px; break-inside: avoid; }
+  .box.alert { border-left-color: var(--no); }
+  .flow { display: flex; flex-wrap: wrap; gap: 4pt; align-items: center; margin: 6pt 0 10pt; font-size: 8.5pt; }
+  .flow span.s { border: 1px solid var(--accent); color: var(--accent); border-radius: 4px; padding: 3pt 6pt; font-weight: 600; }
+  .flow span.a { color: var(--muted); }
+  .page-break { break-before: page; }
+  .toc li { margin-bottom: 1pt; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <h1>SynOC — Reels Pipeline</h1>
+  <p><strong>Документация разработчика:</strong> что уже используется, как всё подключено и что осталось построить.</p>
+  <p class="meta">Версия 1.0 · 29.10.2026 · Репозиторий <code>romanovsynepse/marketingoc</code>, ветка <code>claude/nice-cray-m3ti3b</code></p>
+</div>
+
+<h3>Содержание</h3>
+<ol class="toc">
+  <li>Обзор и статус</li>
+  <li>Используемый стек (as-is)</li>
+  <li>Флоу по шагам: сейчас → цель</li>
+  <li>Hypit: установка и конфигурация</li>
+  <li>Окружение Claude Code (облако)</li>
+  <li>Метрики и формулы</li>
+  <li>Пилотный кейс: @potapovfx</li>
+  <li>Ограничения и выявленные проблемы</li>
+  <li>Дорожная карта</li>
+  <li>Безопасность</li>
+</ol>
+
+<h2>1. Обзор и статус</h2>
+<p>SynOC — система, которая находит вирусные Reels в нише клиента, вытаскивает их структуру, пишет новый сценарий под бренд, производит ролик и учится на статистике клиента.</p>
+<div class="flow">
+  <span class="s">1. Найти блоги</span><span class="a">→</span>
+  <span class="s">2. Вирусные ролики</span><span class="a">→</span>
+  <span class="s">3. Сценарий</span><span class="a">→</span>
+  <span class="s">4. Рерайт</span><span class="a">→</span>
+  <span class="s">5. Производство</span><span class="a">→</span>
+  <span class="s">6. Замкнутый цикл</span>
+</div>
+<p><strong>Текущая стадия: ручной пилот (MVP без разработки).</strong> Шаги выполняются вручную в сессии Claude Code через подключённые сервисы. Автоматизации (база, планировщик, скрипты) пока нет.</p>
+
+<table>
+  <tr><th>Шаг</th><th>Статус</th><th>Чем закрыт сейчас</th></tr>
+  <tr><td>1. Найти блоги</td><td class="warn">Частично</td><td>vidIQ: профиль по известному handle. Поиска по нише пока не было</td></tr>
+  <tr><td>2. Вирусные ролики</td><td class="warn">Частично</td><td>vidIQ: последние 12 рилсов + расчёт медианы вручную</td></tr>
+  <tr><td>3. Сценарий</td><td class="ok">Работает</td><td>vidIQ <code>watch_shortform_content</code>: транскрипт + визуал</td></tr>
+  <tr><td>4. Рерайт</td><td class="ok">Готов</td><td>Claude (Opus) в сессии</td></tr>
+  <tr><td>5. Производство</td><td class="warn">Подготовлено</td><td>Hypit 0.3.1 + HypiHub установлены, первая генерация не запускалась</td></tr>
+  <tr><td>6. Замкнутый цикл</td><td class="no">Нет</td><td>Metricool подключён, но не используется</td></tr>
+</table>
+
+<h2>2. Используемый стек (as-is)</h2>
+<table>
+  <tr><th>Компонент</th><th>Роль</th><th>Как подключён</th><th>Статус</th></tr>
+  <tr><td><strong>Claude Code</strong> (облачная сессия, claude.ai/code)</td><td>Оркестратор: аналитика, разбор, рерайт, запуск Hypit</td><td>Облачное окружение «SynOC»</td><td class="ok">Работает</td></tr>
+  <tr><td><strong>vidIQ</strong></td><td>Данные Instagram, транскрипт и разбор видео</td><td>MCP-коннектор claude.ai</td><td class="ok">Работает</td></tr>
+  <tr><td><strong>Hypit</strong> <code>@hypit/hypit@0.3.1</code></td><td>Производство видео: клон, субтитры, графика, рендер</td><td>npm global + Skill <code>/hypit</code></td><td class="ok">Установлен</td></tr>
+  <tr><td><strong>HypiHub</strong></td><td>Хостинг моделей для Hypit: видео, картинки, голос, WhisperX</td><td>API-ключ в Credential Store Hypit</td><td class="ok">Ключ принят</td></tr>
+  <tr><td><strong>Metricool</strong></td><td>Публикация, аналитика аккаунтов клиента</td><td>MCP-коннектор claude.ai</td><td class="warn">Подключён, не использован</td></tr>
+  <tr><td><strong>GitHub</strong></td><td>Хранение разборов и документации</td><td>Репозиторий <code>marketingoc</code></td><td class="ok">Работает</td></tr>
+  <tr><td>Notion (плагин marketing)</td><td>Карточки задач (шаг 5)</td><td>MCP-плагин</td><td class="no">Ошибка соединения (proxy 403)</td></tr>
+  <tr><td>Sandcastles / Trendsee</td><td>Альтернатива шагам 2–4</td><td>—</td><td class="meta">Изучены, не подключены</td></tr>
+</table>
+
+<h3>2.1 Используемые инструменты vidIQ</h3>
+<table>
+  <tr><th>Инструмент</th><th>Что возвращает</th><th>Цена</th><th>Ограничения</th></tr>
+  <tr><td><code>vidiq_ig_profile</code></td><td>Био, подписчики, число постов, ссылка</td><td>5 кредитов</td><td>Снимок, без динамики роста</td></tr>
+  <tr><td><code>vidiq_ig_profile_reels</code></td><td>Shortcode, подпись, просмотры, лайки, комменты, длительность, дата, закреп</td><td>5 кредитов</td><td><strong>Максимум 12 рилсов</strong>, без пагинации; <strong>нет пересылок и репостов</strong></td></tr>
+  <tr><td><code>vidiq_watch_shortform_content</code></td><td>Транскрипт с таймкодами, текст на экране, покадровый разбор, структура (по кастомному промпту)</td><td>10 кредитов</td><td>Асинхронно, около 2 мин; ASR без гарантии точности</td></tr>
+  <tr><td><code>vidiq_job_poll</code></td><td>Статус и результат асинхронной задачи</td><td>0</td><td>—</td></tr>
+  <tr><td><code>vidiq_instagram_tiktok_outlier_search</code></td><td>Поиск вирусных роликов по теме</td><td>—</td><td>Не опробован; фильтра по handle нет</td></tr>
+</table>
+
+<h2 class="page-break">3. Флоу по шагам: сейчас → цель</h2>
+
+<h3>Шаг 1. Найти блоги</h3>
+<table>
+  <tr><th style="width:18%"></th><th>Сейчас (пилот)</th><th>Цель</th></tr>
+  <tr><td>Данные</td><td>vidIQ <code>ig_profile</code> по известному handle</td><td>HikerAPI (основной) / ScrapeCreators / Apify (запасной)</td></tr>
+  <tr><td>Поиск</td><td>Вручную</td><td>Exa (статьи, подборки) + vidIQ <code>ig_accounts_from_outliers</code></td></tr>
+  <tr><td>Чистка</td><td>—</td><td>Claude Haiku / Gemini Flash по био и подписям</td></tr>
+</table>
+
+<h3>Шаг 2. Найти вирусные ролики</h3>
+<table>
+  <tr><th style="width:18%"></th><th>Сейчас (пилот)</th><th>Цель</th></tr>
+  <tr><td>Сбор</td><td>vidIQ <code>ig_profile_reels</code>: 12 последних</td><td>HikerAPI: любой период + пересылки и репосты</td></tr>
+  <tr><td>Хранение</td><td>Нет (расчёт в сессии)</td><td>Supabase (Postgres) + планировщик повторных замеров</td></tr>
+  <tr><td>Отбор</td><td>Медиана и ER, посчитанные Claude</td><td>SQL / скрипт: «выше нормы», «скорость», «накрутка» (раздел 6)</td></tr>
+</table>
+
+<h3>Шаг 3. Вытащить сценарий</h3>
+<table>
+  <tr><th style="width:18%"></th><th>Сейчас (пилот)</th><th>Цель</th></tr>
+  <tr><td>Речь → текст</td><td>vidIQ <code>watch_shortform_content</code></td><td>ElevenLabs Scribe / Deepgram Nova-3; для пословного тайминга — WhisperX через HypiHub</td></tr>
+  <tr><td>Картинка</td><td>Тот же вызов vidIQ (кастомный промпт)</td><td>Gemini Pro</td></tr>
+  <tr><td>Поиск по смыслу</td><td>—</td><td>Эмбеддинги: OpenAI text-embedding-3 / Cohere / Voyage</td></tr>
+  <tr><td>Хранение</td><td>Markdown в <code>reels/</code> (GitHub)</td><td>Таблица в Supabase + эмбеддинги</td></tr>
+</table>
+<p>Промпт, который использовался для <code>watch_shortform_content</code>:</p>
+<pre>1) ДОСЛОВНАЯ транскрипция всей речи с таймкодами ([мм:сс] текст), без сокращений.
+2) Весь текст на экране (заголовки, плашки, субтитры) с таймкодами.
+3) Покадровый разбор: смены планов, вставки, жесты, звуки, музыка.
+4) Структура: хук (первые 3 сек), механики удержания, где и как подаётся кодовое слово.</pre>
+
+<h3>Шаг 4. Рерайт</h3>
+<table>
+  <tr><th style="width:18%"></th><th>Сейчас (пилот)</th><th>Цель</th></tr>
+  <tr><td>Сценарий</td><td>Claude (Opus) в сессии</td><td>Claude Sonnet (основной) / Opus (премиум)</td></tr>
+  <tr><td>Проверки</td><td>—</td><td>Сходство с оригиналом (эмбеддинги) + тон бренда (Claude Haiku)</td></tr>
+  <tr><td>Утверждение</td><td>Вручную</td><td>Клиент утверждает → только потом генерация</td></tr>
+</table>
+
+<h3>Шаг 5. Производство</h3>
+<table>
+  <tr><th style="width:18%"></th><th>Сейчас (пилот)</th><th>Цель</th></tr>
+  <tr><td>Генерация</td><td><strong>Hypit + HypiHub</strong>: Seedance, GPT Image, MiniMax, PixVerse, Grok Imagine; голос; WhisperX</td><td>Hypit как основной движок; HeyGen для аватаров при необходимости</td></tr>
+  <tr><td>Съёмка человеком</td><td>—</td><td>Телесуфлёр + CapCut / Descript, Submagic</td></tr>
+  <tr><td>Карточка задачи</td><td>—</td><td>Airtable / Notion</td></tr>
+  <tr><td>Публикация</td><td>—</td><td>Metricool (<code>createScheduledPost</code>)</td></tr>
+</table>
+
+<h3>Шаг 6. Замкнутый цикл</h3>
+<table>
+  <tr><th style="width:18%"></th><th>Сейчас (пилот)</th><th>Цель</th></tr>
+  <tr><td>Источник</td><td>—</td><td>Metricool <code>getAnalyticsDataByMetrics</code> / Instagram Graph API</td></tr>
+  <tr><td>Разбор</td><td>—</td><td>Еженедельная задача Claude по расписанию: какие структуры сработали → приоритет при отборе</td></tr>
+</table>
+
+<h2 class="page-break">4. Hypit: установка и конфигурация</h2>
+<p>Hypit — open-source фреймворк, через который ИИ-агент производит видео. Видео описывается на языке SVML/SVS/SVRun, события привязаны к словам, а не к секундам. Модели подключаются через Providers (HypiHub или BYOK).</p>
+
+<h3>4.1 Установка (выполнено)</h3>
+<pre># Skill для агента (ставится в ~/.agents/skills/hypit)
+npx -y skills add hypit-ai/hypit -g -y
+
+# Исполняемый файл
+npm install --global @hypit/hypit        # → @hypit/hypit 0.3.1
+
+# Видео-проект
+mkdir -p /home/user/hypit-studio &amp;&amp; cd /home/user/hypit-studio
+# package.json с { "hypit": { "project": true } }
+hypit runtime init                       # → hypit.runtime.json
+
+# Ключ HypiHub (импорт из файла, файл сразу удаляется)
+hypit auth login hypihub.default --from &lt;keyfile&gt;
+
+# Локальные программы: Chrome Headless Shell, OpenCV (uv)
+NODE_USE_ENV_PROXY=1 hypit runtime up
+NODE_USE_ENV_PROXY=1 hypit doctor</pre>
+
+<h3>4.2 Runtime Profile (<code>hypit.runtime.json</code>)</h3>
+<pre>{
+  "format": "hypit.runtime-local@1",
+  "dataRoot": ".hypit/runtimes/local",
+  "credentials": { "local": { "use": "@hypit/credential-store-local" } },
+  "endpoints": {
+    "hypihub.default":    { "use": "@hypit/provider-hypihub",
+                            "config": { "baseUrl": "https://hypit.ai",
+                                        "apiKey": { "store": "local", "key": "hypihub.oauth" } } },
+    "media.local":        { "use": "@hypit/media-local" },
+    "html.local":         { "use": "@hypit/provider-html-local" },
+    "image.opencv.local": { "use": "@hypit/provider-image-opencv-local" }
+  }
+}</pre>
+
+<h3>4.3 Результат <code>hypit doctor</code></h3>
+<table>
+  <tr><th>Проверка</th><th>Результат</th></tr>
+  <tr><td>HypiHub: ключ и каталог моделей</td><td class="ok">OK</td></tr>
+  <tr><td>Chrome Headless Shell 152 (рендер HTML)</td><td class="ok">OK</td></tr>
+  <tr><td>OpenCV (обработка изображений)</td><td class="ok">OK</td></tr>
+  <tr><td><code>@hypit/elevenlabs-speech#eleven_ttv_v3</code> (Voice Design)</td><td class="warn">Нет маршрута в HypiHub: готовые голоса работают, генерация голоса «с нуля» нет</td></tr>
+</table>
+
+<h3>4.4 Важные нюансы</h3>
+<ul>
+  <li><strong>Прокси:</strong> Node <code>fetch</code> не читает <code>HTTPS_PROXY</code>. Все команды <code>hypit</code>, ходящие в сеть, запускать с <code>NODE_USE_ENV_PROXY=1</code> (Node ≥ 22.21). Без этого: <code>ENOTFOUND hypit.ai</code>.</li>
+  <li><strong>Эфемерность:</strong> облачный контейнер временный. Установка, проект и ключ живут только в текущей сессии. В новой сессии повторить 4.1 или вынести установку в Setup script окружения.</li>
+  <li><strong>Альтернативные провайдеры:</strong> <code>@hypit/provider-hiapi</code>, <code>-pollo</code>, <code>-beatapi</code>, <code>-monid</code>, <code>-tokendance</code> (отдельная установка + запись в Profile).</li>
+  <li><strong>Лицензия:</strong> модифицированная Apache 2.0. Внутреннее и клиентское использование разрешено; мультитенантный SaaS и перепродажа требуют коммерческой лицензии. Логотип в CLI и отчётах удалять нельзя. Выходные видео принадлежат пользователю.</li>
+</ul>
+
+<h3>4.5 Использование</h3>
+<pre>/hypit Сделай клон ролика https://www.instagram.com/reel/&lt;shortcode&gt;/
+Тема: &lt;продукт и ЦА&gt;. Сначала покажи план и смету.</pre>
+<p>Агент обязан показать план и стоимость до любых платных вызовов. Ориентир по примерам Hypit: около $1–1,2 за ролик 18–26 секунд.</p>
+
+<h2 class="page-break">5. Окружение Claude Code (облако)</h2>
+<table>
+  <tr><th>Параметр</th><th>Значение</th></tr>
+  <tr><td>Окружение</td><td>«SynOC» (claude.ai → Code)</td></tr>
+  <tr><td>Network access</td><td>Limited + package managers</td></tr>
+  <tr><td>Setup script</td><td>Не задан</td></tr>
+  <tr><td>Environment variables / Network secrets</td><td>Не заданы (ключ HypiHub хранится в Credential Store Hypit внутри сессии)</td></tr>
+  <tr><td>Node / pnpm / ffmpeg</td><td>22.22 / 10.28 / 6.1.1</td></tr>
+</table>
+<p><strong>Allowed domains:</strong></p>
+<pre>marketer.syneps.ai
+hypit.ai
+*.hypit.ai
+storage.googleapis.com
+*.instagram.com
+*.cdninstagram.com
+*.tiktok.com
+*.tiktokcdn.com</pre>
+<p>Для HiAPI добавить <code>api.hiapi.ai</code>; для HikerAPI — его API-домен.</p>
+
+<h2>6. Метрики и формулы</h2>
+<table>
+  <tr><th>Метрика</th><th>Формула</th><th>Порог / применение</th></tr>
+  <tr><td>Медиана аккаунта</td><td>median(просмотры последних N роликов, без закрепов)</td><td>База для сравнения</td></tr>
+  <tr><td>Выше нормы (outlier)</td><td>просмотры ÷ медиана</td><td>&gt; 3× → в отбор</td></tr>
+  <tr><td>Скорость</td><td>Δпросмотров ÷ Δчасов между замерами</td><td>Нужны повторные замеры (Supabase)</td></tr>
+  <tr><td>Вовлечённость (ER)</td><td>(лайки + комменты) ÷ просмотры</td><td>Пилот: 0,5–1,7%</td></tr>
+  <tr><td>Накрутка</td><td>ER аномально низкий при высоких просмотрах</td><td>Порог подобрать на данных</td></tr>
+  <tr><td>Охват от базы</td><td>медиана ÷ подписчики</td><td>Диагностика «выгорания» аудитории</td></tr>
+  <tr><td>Комменты ÷ лайки</td><td>комменты ÷ лайки</td><td>≈ 1 → комментарии от кодового слова</td></tr>
+</table>
+<div class="box">Закрепы исключать из медианы и outlier-расчёта: они старые и искажают базу. Ролики младше 24–48 ч не сравнивать с остальными, их цифры ещё растут.</div>
+
+<h2>7. Пилотный кейс: @potapovfx</h2>
+<p>395,3K подписчиков · ниша: рост через контент · воронка: кодовое слово в комментарии → директ → <code>app.potapovfx.com/lp</code>.</p>
+<table>
+  <tr><th>Показатель (10 рилсов, 22–28.10.2026)</th><th>Значение</th></tr>
+  <tr><td>Медиана просмотров</td><td>~14,9K</td></tr>
+  <tr><td>Охват от базы</td><td>~4%</td></tr>
+  <tr><td>Outlier ×3</td><td>Нет (максимум 2,05×)</td></tr>
+  <tr><td>Частота</td><td>10 роликов за 7 дней</td></tr>
+  <tr><td>Лучшее кодовое слово</td><td>СВЯЗКА (~27K в среднем) против ФОРМАТ (~10K)</td></tr>
+</table>
+<p><strong>Разобран ролик:</strong> «Как сбежать из тюрьмы низких просмотров» (<code>De9nbLlM41O</code>, 30,4K, 2:43). Полный транскрипт и разбор: <code>reels/potapovfx_tyurma-prosmotrov.md</code>.</p>
+<p>Структура: хук с метафорой «тюрьма» (0–3 с) → авторитет «2 млрд у учеников» → лестница из 4 уровней → кодовое слово в середине (1:28) → уровень 4 как интрига после CTA → снятие возражения «теневой бан» + подписка.</p>
+
+<h2 class="page-break">8. Ограничения и выявленные проблемы</h2>
+<table>
+  <tr><th>Проблема</th><th>Причина</th><th>Решение</th></tr>
+  <tr><td>Нет пересылок и репостов</td><td>vidIQ их не отдаёт (в самом Instagram счётчики публичны)</td><td>HikerAPI или ручной ввод</td></tr>
+  <tr><td>Только 12 последних рилсов</td><td>Лимит <code>ig_profile_reels</code>, нет пагинации</td><td>HikerAPI / ScrapeCreators</td></tr>
+  <tr><td>Прямые запросы к Instagram заблокированы</td><td>Политика безопасности агента (Website Access Circumvention)</td><td>Только через официальные API или сервисы данных</td></tr>
+  <tr><td><code>ENOTFOUND</code> у Node-инструментов</td><td>Node fetch игнорирует прокси</td><td><code>NODE_USE_ENV_PROXY=1</code></td></tr>
+  <tr><td>Hypit пропадает между сессиями</td><td>Эфемерный контейнер</td><td>Setup script окружения + ключ в Network secrets</td></tr>
+  <tr><td>Notion недоступен</td><td>Proxy 403 у плагина</td><td>Переподключить коннектор в настройках claude.ai</td></tr>
+  <tr><td>Нет Voice Design в HypiHub</td><td>Нет маршрута в каталоге</td><td>Готовые голоса или ElevenLabs напрямую</td></tr>
+</table>
+
+<h2>9. Дорожная карта</h2>
+<table>
+  <tr><th>Этап</th><th>Задача</th><th>Результат</th></tr>
+  <tr><td><strong>Неделя 1</strong></td><td>Ручной пилот: vidIQ → разбор → рерайт Claude → Hypit → Metricool</td><td>Первые ролики клиента, проверка процесса</td></tr>
+  <tr><td>Неделя 2</td><td>HikerAPI (данные + пересылки), ElevenLabs Scribe (русский STT)</td><td>Полные данные за любой период</td></tr>
+  <tr><td>Неделя 3</td><td>Supabase: таблицы accounts / reels / snapshots / scripts; планировщик замеров; формулы отбора</td><td>Автоматический отбор outliers</td></tr>
+  <tr><td>Неделя 4</td><td>Эмбеддинги + проверки рерайта; Setup script для Hypit; карточки в Notion/Airtable</td><td>Рерайт с контролем качества</td></tr>
+  <tr><td>Далее</td><td>Metricool / IG Graph API → еженедельный разбор Claude по расписанию</td><td>Замкнутый цикл, обучение на бренде</td></tr>
+</table>
+
+<h2>10. Безопасность</h2>
+<div class="box alert">
+  <p><strong>Ключ HypiHub был отправлен в чат открытым текстом.</strong> Он сохранён в истории сессии. Рекомендуется перевыпустить ключ в кабинете hypit.ai и хранить новый только в настройках окружения (Network secrets / Environment variables) или в Credential Store Hypit.</p>
+</div>
+<ul>
+  <li>Ключи не коммитить, не передавать аргументами команд, не вставлять в чат.</li>
+  <li>Environment variables окружения видят все его пользователи; для секретов предпочтительнее Network secrets.</li>
+  <li>Все платные генерации — только после показанной сметы и подтверждения.</li>
+</ul>
+
+<p class="meta" style="margin-top:18pt">Источники: репозиторий github.com/hypit-ai/hypit (README, docs/quickstart.md, docs/guide/service-partners.md, skills/hypit/references/environment/*), ответы инструментов vidIQ, вывод <code>hypit doctor</code>.</p>
+</body>
+</html>
