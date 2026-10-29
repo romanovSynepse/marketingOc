@@ -92,7 +92,23 @@
   <tr><td>Sandcastles / Trendsee</td><td>Альтернатива шагам 2–4</td><td>—</td><td class="meta">Изучены, не подключены</td></tr>
 </table>
 
-<h3>2.1 Используемые инструменты vidIQ</h3>
+<h3>2.1 Сервисы данных и запланированный стек (ещё не подключены)</h3>
+<p>Это целевая связка из исходного флоу. В пилоте их роль временно выполняет vidIQ; подключение каждого = аккаунт + API-ключ + домен в Allowed domains.</p>
+<table>
+  <tr><th>Сервис</th><th>Шаг</th><th>Роль</th><th>Зачем нужен (чего не даёт vidIQ)</th><th>Приоритет</th></tr>
+  <tr><td><strong>HikerAPI</strong></td><td>1, 2</td><td><strong>Основной</strong> источник данных Instagram: профили, рилсы, метрики</td><td>Любой период (не 12 роликов), <strong>пересылки и репосты</strong>, массовый сбор по списку аккаунтов</td><td class="no">Высокий · неделя 2</td></tr>
+  <tr><td><strong>ScrapeCreators</strong></td><td>1, 3</td><td>Поиск профилей и хэштегов; готовые транскрипты</td><td>Поиск аккаунтов по нише/хэштегу; транскрипт без отдельного STT</td><td class="warn">Средний</td></tr>
+  <tr><td><strong>Apify</strong></td><td>1, 2</td><td><strong>Запасной</strong> скрейпер (Instagram/TikTok actors)</td><td>Резерв при сбоях HikerAPI, TikTok-данные</td><td class="warn">Резерв</td></tr>
+  <tr><td>Exa</td><td>1</td><td>Поиск блогеров через статьи и подборки</td><td>Находит авторов вне Instagram-поиска</td><td class="warn">Средний</td></tr>
+  <tr><td>Claude Haiku / Gemini Flash</td><td>1</td><td>Дешёвая чистка списка по био и подписям</td><td>—</td><td class="warn">Средний</td></tr>
+  <tr><td>Supabase</td><td>2</td><td>База + планировщик повторных замеров</td><td>История просмотров → «скорость», outliers</td><td class="no">Высокий · неделя 3</td></tr>
+  <tr><td>ElevenLabs Scribe / Deepgram Nova-3</td><td>3</td><td>Распознавание русской речи</td><td>Точность и масштаб без кредитов vidIQ</td><td class="no">Высокий · неделя 2</td></tr>
+  <tr><td>Gemini Pro</td><td>3</td><td>Разбор визуала видео целиком</td><td>Массовый разбор вместо поштучного vidIQ</td><td class="warn">Средний</td></tr>
+  <tr><td>OpenAI / Cohere / Voyage embeddings</td><td>3, 4</td><td>Поиск по смыслу, проверка сходства</td><td>—</td><td class="warn">Неделя 4</td></tr>
+  <tr><td>Airtable / Notion</td><td>5</td><td>Карточки задач</td><td>—</td><td class="warn">Неделя 4</td></tr>
+</table>
+
+<h3>2.2 Используемые инструменты vidIQ</h3>
 <table>
   <tr><th>Инструмент</th><th>Что возвращает</th><th>Цена</th><th>Ограничения</th></tr>
   <tr><td><code>vidiq_ig_profile</code></td><td>Био, подписчики, число постов, ссылка</td><td>5 кредитов</td><td>Снимок, без динамики роста</td></tr>
