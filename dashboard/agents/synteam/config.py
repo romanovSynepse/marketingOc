@@ -5,6 +5,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 BRAIN_DIR = ROOT / "brain"
+# Общий мозг всех чатов SynOC: в контейнере лежит в /app/shared, локально это корень репозитория
+SHARED_DIR = ROOT / "shared" if (ROOT / "shared").exists() else ROOT.parent.parent
+SHARED_BRAIN = [SHARED_DIR / "CLAUDE.md", SHARED_DIR / "brain" / "synoc-marketer-instruction.md"]
 
 
 def _load_dotenv():

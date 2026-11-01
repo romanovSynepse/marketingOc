@@ -19,7 +19,7 @@ bash deploy/setup-server.sh marketer.syneps.ai nick
 Наружу открыт только Caddy.
 
 ## 4. Ключи агентов
-`/opt/marketingoc/traffic-team/.env` (шаблон `.env.example`): `ANTHROPIC_API_KEY`, `THREADS_ACCOUNTS`,
+`/opt/marketingoc/dashboard/agents/.env` (шаблон `.env.example`): `ANTHROPIC_API_KEY`, `THREADS_ACCOUNTS`,
 `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`. Автопилот агентов:
 ```bash
 docker compose -f docker-compose.yml -f deploy/docker-compose.prod.yml --env-file deploy/.env --profile autopilot up -d --build

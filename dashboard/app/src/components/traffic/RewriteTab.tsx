@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "@/api";
 
 // Rewrite Agent: оригинал → разбор → эксперимент хуков → победитель → масштаб.
-// Агент (traffic-team worker) подхватывает новые источники и запросы на масштаб сам, раз в 15 минут.
+// Агент (dashboard/agents, worker) подхватывает новые источники и запросы на масштаб сам, раз в 15 минут.
 
 const SYN_BLUE = "#2f80ff";
 

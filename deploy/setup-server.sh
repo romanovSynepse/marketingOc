@@ -20,7 +20,7 @@ if [ ! -f deploy/.env ]; then
   printf 'DOMAIN=%s\nAUTH_USER=%s\nAUTH_HASH=%s\n' "$DOMAIN" "$AUTH_USER" "${HASH//\$/\$\$}" > deploy/.env
   chmod 600 deploy/.env
 fi
-[ -f traffic-team/.env ] || cp traffic-team/.env.example traffic-team/.env
+[ -f dashboard/agents/.env ] || cp dashboard/agents/.env.example dashboard/agents/.env
 
 docker compose -f docker-compose.yml -f deploy/docker-compose.prod.yml --env-file deploy/.env up -d --build
-echo "Готово: https://$DOMAIN (логин $AUTH_USER). Ключи агентов: $DIR/traffic-team/.env"
+echo "Готово: https://$DOMAIN (логин $AUTH_USER). Ключи агентов: $DIR/dashboard/agents/.env"

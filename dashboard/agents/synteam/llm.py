@@ -19,8 +19,9 @@ def client() -> anthropic.Anthropic:
 
 @lru_cache(maxsize=1)
 def brain() -> str:
+    """Сначала общий мозг SynOC (CLAUDE.md + инструкция маркетолога), потом файлы команды трафика."""
     parts = []
-    for path in sorted(config.BRAIN_DIR.glob("*.md")):
+    for path in [p for p in config.SHARED_BRAIN if p.exists()] + sorted(config.BRAIN_DIR.glob("*.md")):
         parts.append(f"<file name=\"{path.name}\">\n{path.read_text(encoding='utf-8').strip()}\n</file>")
     return "\n\n".join(parts)
 
@@ -31,7 +32,9 @@ def run(role: str, task: str, output: Type[T], *, effort: str = "medium",
     system = [
         {
             "type": "text",
-            "text": "Ты часть ИИ-команды по трафику Syneps AI. Ниже база знаний команды.\n\n" + brain(),
+            "text": ("Ты часть ИИ-команды по трафику Syneps AI. Ниже база знаний команды. "
+                     "Если файлы расходятся (цены, ЦА, воронка), верны CLAUDE.md и "
+                     "synoc-marketer-instruction.md: они новее.\n\n" + brain()),
             "cache_control": {"type": "ephemeral"},
         },
         {"type": "text", "text": role},

@@ -73,7 +73,7 @@
 | `reels/` | 🎬 Контент-завод: разборы, сценарии, клоны (Hypit), выкладка (Metricool) |
 | `outreach/` | 🤝 Поиск клиентов: аутрич, ИИ-продавец, квалификатор, автоответы |
 | `infra/` | ⚙️ Конвейер данных: HikerAPI/ScrapeCreators/Apify, Supabase, транскрипция |
-| `dashboard/` | 📊 Админка MarketerOC (код в `marketing-summary-table-main/`) |
+| `dashboard/` | 📊 Админка MarketerOC: `app/` (сайт, бэкенд, миграции), `agents/` (ИИ-команда по трафику); деплой в `deploy/`, живёт на marketer.syneps.ai |
 | `docs/` | Документация разработчика (`docs/SynOC_Reels_Pipeline_DevDoc.pdf`) |
 
 Результаты сохранять в нужную папку и коммитить: контейнер сессии временный, репозиторий — нет.

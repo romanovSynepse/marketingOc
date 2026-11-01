@@ -1,0 +1,10 @@
+# Только для сборок с контекстом = корень репозитория (агенты)
+.git
+**/node_modules
+**/dist
+**/__pycache__
+**/.env
+*.pdf
+marketing-summary-table_build_252910
+deploy/.env
+deploy/state

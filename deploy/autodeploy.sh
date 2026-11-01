@@ -13,13 +13,30 @@ LOCK=/var/lock/marketingoc-autodeploy.lock
 SELF="$DIR/deploy/autodeploy.sh"
 CRON_LINE="*/5 * * * * bash $SELF >> $LOG 2>&1"
 COMPOSE=(docker compose -f docker-compose.yml -f deploy/docker-compose.prod.yml --env-file deploy/.env)
-MIGRATIONS=marketing-summary-table-main/db_migrations
+MIGRATIONS=dashboard/app/db_migrations
+AGENTS_ENV=dashboard/agents/.env
 
 log() { echo "[$(date '+%F %T')] $*"; }
 
-# Автопилот агентов включается сам, как только в traffic-team/.env появился ключ Anthropic
+# Ветка, за которой следит сервер. Переопределяется строкой DEPLOY_BRANCH=... в deploy/.env
+target_branch() {
+  local b
+  b=$(grep -E '^DEPLOY_BRANCH=' deploy/.env 2>/dev/null | tail -1 | cut -d= -f2- | tr -d '"'"'"' ')
+  echo "${b:-main}"
+}
+
+# Ключи агентов раньше лежали в traffic-team/.env (не в git): переносим на новое место один раз
+move_legacy_env() {
+  if [ -f traffic-team/.env ] && [ ! -f "$AGENTS_ENV" ]; then
+    mv traffic-team/.env "$AGENTS_ENV"
+    log "moved traffic-team/.env -> $AGENTS_ENV"
+  fi
+  [ -d traffic-team ] && find traffic-team -depth -type d -empty -delete 2>/dev/null || true
+}
+
+# Автопилот агентов включается сам, как только в dashboard/agents/.env появился ключ Anthropic
 autopilot_enabled() {
-  [ -f traffic-team/.env ] && grep -Eq '^ANTHROPIC_API_KEY=.+' traffic-team/.env
+  [ -f "$AGENTS_ENV" ] && grep -Eq '^ANTHROPIC_API_KEY=.+' "$AGENTS_ENV"
 }
 
 # Начальные миграции (V0001–V0003) Postgres применяет сам при первом старте.
@@ -41,6 +58,7 @@ migrate() {
 deploy() {
   local restart_caddy="$1"
   local autopilot=no
+  move_legacy_env
   if autopilot_enabled; then COMPOSE+=(--profile autopilot); autopilot=yes; fi
   log "docker compose up -d --build (autopilot: $autopilot)"
   "${COMPOSE[@]}" up -d --build --remove-orphans
@@ -85,6 +103,20 @@ case "${1:-run}" in
     ;;
   run)
     git fetch --quiet origin
+    # Переход на целевую ветку (по умолчанию main), но только когда она уже содержит всё,
+    # что сейчас задеплоено: так сервер не откатится, пока PR не принят.
+    current=$(git rev-parse --abbrev-ref HEAD)
+    target=$(target_branch)
+    if [ "$current" != "$target" ] && git rev-parse -q --verify "origin/$target" >/dev/null \
+        && git merge-base --is-ancestor HEAD "origin/$target"; then
+      old_rev=$(git rev-parse HEAD)
+      git checkout --quiet -B "$target" --track "origin/$target"
+      log "switch branch $current -> $target (${old_rev:0:7} -> $(git rev-parse --short HEAD))"
+      caddy=no
+      if git diff --name-only "$old_rev" HEAD | grep -qx 'deploy/Caddyfile'; then caddy=yes; fi
+      exec 9>&-
+      exec bash "$SELF" _deploy "$caddy"
+    fi
     local_rev=$(git rev-parse HEAD)
     remote_rev=$(git rev-parse '@{u}')
     if [ "$local_rev" = "$remote_rev" ]; then

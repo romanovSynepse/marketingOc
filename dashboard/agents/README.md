@@ -25,8 +25,10 @@
 Вручную: `python -m synteam rw add --url ...`, `rw tick`, `rw evaluate --id N`, `rw scale --id N`.
 
 ## Мозг
-Папка `brain/` подмешивается в системный промпт каждого агента (кэшируется, поэтому дёшево):
-- `00_synoc.md`: сюда вставить промпт «Главного маркетолога» из SynOC
+В системный промпт каждого агента подмешиваются (кэшируется, поэтому дёшево):
+- общий мозг SynOC из корня репозитория: `CLAUDE.md` и `brain/synoc-marketer-instruction.md`.
+  При расхождениях они главнее остальных файлов;
+- файлы команды трафика из `dashboard/agents/brain/`:
 - `product.md`: продукт, ICP, кейсы, тарифы, воронка (из head Syneps и Master Context)
 - `voice.md`: голос и визуальный стиль @nickromanov, рубрики
 - `channels.md`: каналы, дневные нормы, UTM
@@ -36,9 +38,10 @@
 
 ## Запуск
 ```bash
+docker compose up -d postgres   # из корня репозитория, миграции применятся сами
+cd dashboard/agents
 cp .env.example .env            # ключи: ANTHROPIC_API_KEY, Threads, Telegram
 pip install -r requirements.txt
-docker compose up -d postgres   # из корня репозитория, миграции применятся сами
 
 python -m synteam plan --telegram                       # план на день
 python -m synteam scout --topic "AI UGC видео для брендов"
