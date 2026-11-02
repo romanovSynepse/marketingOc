@@ -223,6 +223,116 @@ def recipe_params(rng: random.Random, color_name: str) -> dict:
     }
 
 
+HOOK_FONT_MAIN = ["/usr/share/fonts/opentype/inter/InterDisplay-Light.otf",
+                  "/usr/share/fonts/opentype/inter/Inter-Light.otf"]
+HOOK_FONT_SUB = ["/usr/share/fonts/opentype/inter/InterDisplay-Regular.otf",
+                 "/usr/share/fonts/opentype/inter/Inter-Regular.otf"]
+
+
+def _font(cands: list[str], size: int):
+    from PIL import ImageFont
+    for f in cands + FONT_CANDIDATES:
+        if os.path.exists(f):
+            return ImageFont.truetype(f, size)
+    return ImageFont.load_default()
+
+
+def _tracked_width(font, text: str, track: float) -> float:
+    return sum(font.getlength(ch) for ch in text) + track * max(len(text) - 1, 0)
+
+
+def _wrap(font, text: str, max_w: int, track: float) -> list[str]:
+    # короткие слова (а, и, в, не…) не оставляем в конце строки — клеим к следующему
+    words, glue = [], ""
+    for wd in text.split():
+        if len(wd) <= 2 and not wd[-1:] in ".,?!:;":
+            glue += wd + "\u00a0"
+        else:
+            words.append(glue + wd)
+            glue = ""
+    if glue:
+        words.append(glue.rstrip("\u00a0"))
+    lines = _wrap_greedy(font, words, max_w, track)
+    if len(lines) == 2:  # балансируем две строки по ширине
+        best = min(range(1, len(words)), key=lambda i: max(
+            _tracked_width(font, " ".join(words[:i]), track), _tracked_width(font, " ".join(words[i:]), track)))
+        lines = [" ".join(words[:best]), " ".join(words[best:])]
+    return [l.replace("\u00a0", " ") for l in lines]
+
+
+def _wrap_greedy(font, words: list[str], max_w: int, track: float) -> list[str]:
+    lines, cur = [], ""
+    for word in words:
+        cand = (cur + " " + word).strip()
+        if cur and _tracked_width(font, cand, track) > max_w:
+            lines.append(cur)
+            cur = word
+        else:
+            cur = cand
+    if cur:
+        lines.append(cur)
+    return lines
+
+
+def render_hook_png(hook: str, path: str, w: int = OUT_W, h: int = OUT_H, margin_x: int = 110,
+                    top: float = 0.13) -> bool:
+    """Хук в стиле блога: тонкий гротеск, нижний регистр, плотный трекинг, слева; подпись «<< …» под ним.
+    Формат хука: «главный текст | подпись». Возвращает False, если нет Pillow."""
+    try:
+        from PIL import Image, ImageDraw, ImageFilter
+    except Exception:
+        return False
+    main, _, sub = (x.strip() for x in hook.partition("|"))
+    main = main.lower()
+    max_w = w - 2 * margin_x
+    size = 100
+    while True:
+        fm = _font(HOOK_FONT_MAIN, size)
+        track = -size * 0.035
+        lines = _wrap(fm, main, max_w, track)
+        if (len(lines) <= 3 and all(_tracked_width(fm, l, track) <= max_w for l in lines)) or size <= 64:
+            break
+        size -= 4
+    fs = _font(HOOK_FONT_SUB, int(size * 0.42))
+    img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    y = int(h * top)
+    lh = int(size * 0.98)
+
+    def draw_tracked(x: float, y: int, text: str, font, tr: float) -> None:
+        for ch in text:
+            d.text((x, y), ch, font=font, fill=(255, 255, 255, 255))
+            x += font.getlength(ch) + tr
+
+    for line in lines:
+        draw_tracked(margin_x, y, line, fm, track)
+        y += lh
+    if sub:
+        sub_txt = sub if sub.startswith(("<<", "//", "[")) else "<< " + sub
+        draw_tracked(margin_x + 4, y + int(size * 0.12), sub_txt.lower(), fs, -fs.size * 0.01)
+    # мягкая тень для читаемости на светлом фоне (едва заметная)
+    alpha = img.split()[3]
+    shadow = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    shadow.putalpha(alpha.filter(ImageFilter.GaussianBlur(6)).point(lambda a: int(a * 0.35)))
+    out = Image.alpha_composite(shadow, img)
+    out.save(path)
+    return True
+
+
+def make_cover(clone: str, dst: str, hook: str, at_s: float, tmp: str) -> bool:
+    """Обложка: кадр из клона (после хука) + тот же текст хука. Новый кадр у каждого клона."""
+    frame = os.path.join(tmp, "cover_frame.png")
+    run(["ffmpeg", "-v", "error", "-y", "-ss", f"{at_s:.2f}", "-i", clone, "-frames:v", "1", frame])
+    png = os.path.join(tmp, "cover_hook.png")
+    if not render_hook_png(hook, png):
+        return False
+    from PIL import Image
+    base = Image.open(frame).convert("RGBA")
+    over = Image.open(png).resize(base.size)
+    Image.alpha_composite(base, over).convert("RGB").save(dst, quality=92)
+    return True
+
+
 def drawtext_has_align() -> bool:
     try:
         return "text_align" in subprocess.run(["ffmpeg", "-hide_banner", "-h", "filter=drawtext"],
@@ -285,7 +395,31 @@ def build_clone(src: str, dst: str, p: dict, hook: str | None, info: dict, tmp: 
     else:
         vlabel = "v"
     graph += f";[1:v][{vlabel}]overlay={b}:{b}:shortest=1:format=auto[o]"
-    if hook:
+    hook_png = os.path.join(tmp, "hook.png")
+    if hook and render_hook_png(hook, hook_png):
+        src_lbl = "o"
+        if cover_top:
+            # старый вшитый хук сверху: размытая и притемнённая полоса на первые 3 с
+            y0, bh = b // 2 * 2, int(ih * 0.30) // 2 * 2
+            fmask = os.path.join(tmp, "fade.png")
+            from PIL import Image
+            fm = Image.new("L", (iw, bh))
+            fade = int(bh * 0.25)
+            for yy in range(bh):
+                a = min(1.0, (bh - 1 - yy) / fade)  # сверху полоса упирается в рамку, растушёвка только снизу
+                fm.paste(int(255 * max(a, 0)), (0, yy, iw, yy + 1))
+            fm.save(fmask)
+            mi = 3 if vlabel == "vr" else 2
+            inputs += ["-loop", "1", "-i", fmask]
+            graph += (f";[o]split[ob][oc];[oc]crop={iw}:{bh}:{b}:{y0},boxblur=60:5,eq=brightness=-0.12,format=yuva420p[bl0]"
+                      f";[{mi}:v]format=gray,fps={FPS}[fm];[bl0][fm]alphamerge[blur]"
+                      f";[ob][blur]overlay={b}:{y0}:shortest=1:enable='lt(t,3)'[oh]")
+            src_lbl = "oh"
+        idx = (3 if vlabel == "vr" else 2) + (1 if cover_top else 0)
+        inputs += ["-loop", "1", "-i", hook_png]
+        graph += f";[{idx}:v]format=rgba,fps={FPS}[hk];[{src_lbl}][hk]overlay=0:0:shortest=1:enable='lt(t,3)'[o2]"
+        vout = "o2"
+    elif hook:
         font = next((f for f in FONT_CANDIDATES if os.path.exists(f)), None)
         text, size = fit_hook(hook, font, int(iw * 0.86))
         hook_file = os.path.join(tmp, "hook.txt")
@@ -360,7 +494,14 @@ def cmd_clone(src: str, n: int, out_dir: str, hooks: list[str], seed: int | None
         dst = os.path.join(out_dir, f"{base}_A{i + 1:02d}.mp4")
         with tempfile.TemporaryDirectory() as tmp:
             build_clone(src, dst, p, hook, info, tmp, cover_top)
-        rec = {"file": dst, "hook": hook, "params": p, "metadata_clean": metadata_clean(dst)}
+            cover = None
+            if hook:
+                dur = float(info.get("duration") or 10)
+                at = rng.uniform(3.5, max(4.0, dur * 0.8))     # у каждого клона свой стоп-кадр
+                cover = dst[:-4] + "_cover.jpg"
+                if not make_cover(dst, cover, hook, at, tmp):
+                    cover = None
+        rec = {"file": dst, "hook": hook, "cover": cover, "params": p, "metadata_clean": metadata_clean(dst)}
         with open(dst[:-4] + ".json", "w") as f:
             json.dump(rec, f, ensure_ascii=False, indent=1)
         print(f"✓ {os.path.basename(dst)} · рамка {p['frame']} {p['border_px']}px · зум ≤{p['zoom_max']}"
