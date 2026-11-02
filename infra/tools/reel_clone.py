@@ -8,7 +8,7 @@
   python3 reel_clone.py fetch <ссылка-или-shortcode> [--out DIR]
   python3 reel_clone.py clone <файл> [-n 3] [--out DIR] [--hook "текст" ...] [--seed N]
   python3 reel_clone.py check <файл> --against <файл-или-папка> [...]
-  python3 reel_clone.py run   <ссылка|shortcode|файл> [-n 3] [--out DIR] [--hook ...] [--against ...]
+  python3 reel_clone.py run   <ссылка|shortcode|файл> [-n 3] [--out DIR] [--hook ...] [--against ...] [--cover-top]
 
 Переменные окружения:
   HIKERAPI_KEY           ключ HikerAPI (для fetch/run по ссылке)
@@ -223,7 +223,39 @@ def recipe_params(rng: random.Random, color_name: str) -> dict:
     }
 
 
-def build_clone(src: str, dst: str, p: dict, hook: str | None, info: dict, tmp: str) -> None:
+def drawtext_has_align() -> bool:
+    try:
+        return "text_align" in subprocess.run(["ffmpeg", "-hide_banner", "-h", "filter=drawtext"],
+                                              capture_output=True, text=True).stdout
+    except Exception:
+        return False
+
+
+def fit_hook(hook: str, font: str | None, max_w: int, size: int = 60, min_size: int = 40) -> tuple[str, int]:
+    """Подогнать хук под ширину: сначала перенос на 2 строки, потом уменьшение шрифта."""
+    try:
+        from PIL import ImageFont
+        def width(txt: str, sz: int) -> float:
+            f = ImageFont.truetype(font, sz) if font else None
+            return max(f.getlength(line) for line in txt.split("\n")) if f else max(map(len, txt.split("\n"))) * sz * 0.55
+    except Exception:
+        def width(txt: str, sz: int) -> float:
+            return max(map(len, txt.split("\n"))) * sz * 0.55
+    text = hook
+    if width(text, size) > max_w and " " in hook:
+        words = hook.split(" ")
+        # переносим по знаку препинания, если он есть, иначе — пополам по длине
+        punct = [i for i in range(1, len(words)) if words[i - 1][-1:] in ".,:;?!—"]
+        cands = punct or range(1, len(words))
+        best = min(cands, key=lambda i: abs(len(" ".join(words[:i])) - len(" ".join(words[i:]))))
+        text = " ".join(words[:best]) + "\n" + " ".join(words[best:])
+    while size > min_size and width(text, size) > max_w:
+        size -= 2
+    return text, size
+
+
+def build_clone(src: str, dst: str, p: dict, hook: str | None, info: dict, tmp: str,
+                cover_top: bool = False) -> None:
     b = p["border_px"]
     iw, ih = OUT_W - 2 * b, OUT_H - 2 * b
     bz = p["base_zoom"]
@@ -255,12 +287,24 @@ def build_clone(src: str, dst: str, p: dict, hook: str | None, info: dict, tmp: 
     graph += f";[1:v][{vlabel}]overlay={b}:{b}:shortest=1:format=auto[o]"
     if hook:
         font = next((f for f in FONT_CANDIDATES if os.path.exists(f)), None)
+        text, size = fit_hook(hook, font, int(iw * 0.86))
         hook_file = os.path.join(tmp, "hook.txt")
         with open(hook_file, "w") as f:
-            f.write(hook)
+            f.write(text)
         fontopt = f"fontfile={font}:" if font else ""
-        graph += (f";[o]drawtext={fontopt}textfile={hook_file}:fontsize=56:fontcolor=white"
-                  f":x=(w-text_w)/2:y=h*0.17:shadowcolor=black@0.55:shadowx=0:shadowy=2"
+        src_lbl, color, ypos = "o", "white", "h*0.15"
+        shadow = ":shadowcolor=black@0.6:shadowx=0:shadowy=2"
+        align = ":text_align=C" if "\n" in text and drawtext_has_align() else ""
+        if cover_top:
+            # Старый хук, вшитый в исходник сверху: закрываем размытой полосой на первые 3 с.
+            y0, bh = b + int(ih * 0.04), int(ih * 0.22)
+            graph += (f";[o]split[ob][oc];[oc]crop={iw}:{bh}:{b}:{y0},boxblur=40:4[blur]"
+                      f";[ob][blur]overlay={b}:{y0}:enable='lt(t,3)'[oh]")
+            src_lbl = "oh"
+            # на светлой размытой полосе — тёмный текст без тени, по центру полосы
+            color, shadow, ypos = "0x1c1c1e", "", f"{y0 + bh // 2}-text_h/2"
+        graph += (f";[{src_lbl}]drawtext={fontopt}textfile={hook_file}:fontsize={size}:fontcolor={color}"
+                  f":line_spacing=10:x=(w-text_w)/2:y={ypos}{shadow}{align}"
                   f":enable='lt(t,3)'[o2]")
         vout = "o2"
     else:
@@ -300,7 +344,8 @@ def metadata_clean(path: str) -> bool:
     return not any(s in data for s in (b"x264", b"Lavf", b"Lavc", b"ffmpeg", b"creation_time"))
 
 
-def cmd_clone(src: str, n: int, out_dir: str, hooks: list[str], seed: int | None) -> list[dict]:
+def cmd_clone(src: str, n: int, out_dir: str, hooks: list[str], seed: int | None,
+              cover_top: bool = False) -> list[dict]:
     need_tools()
     info = probe(src)
     os.makedirs(out_dir, exist_ok=True)
@@ -314,7 +359,7 @@ def cmd_clone(src: str, n: int, out_dir: str, hooks: list[str], seed: int | None
         hook = hooks[i] if i < len(hooks) else (hooks[-1] if hooks else None)
         dst = os.path.join(out_dir, f"{base}_A{i + 1:02d}.mp4")
         with tempfile.TemporaryDirectory() as tmp:
-            build_clone(src, dst, p, hook, info, tmp)
+            build_clone(src, dst, p, hook, info, tmp, cover_top)
         rec = {"file": dst, "hook": hook, "params": p, "metadata_clean": metadata_clean(dst)}
         with open(dst[:-4] + ".json", "w") as f:
             json.dump(rec, f, ensure_ascii=False, indent=1)
@@ -398,9 +443,10 @@ def cmd_check(path: str, against: list[str], quiet: bool = False) -> dict:
 
 # ── run: всё сразу ──────────────────────────────────────────────────────────
 
-def cmd_run(ref: str, n: int, out_dir: str, hooks: list[str], against: list[str], seed: int | None) -> None:
+def cmd_run(ref: str, n: int, out_dir: str, hooks: list[str], against: list[str], seed: int | None,
+            cover_top: bool = False) -> None:
     src = ref if os.path.exists(ref) else cmd_fetch(ref, os.path.join(out_dir, "source"))
-    clones = cmd_clone(src, n, os.path.join(out_dir, "clones"), hooks, seed)
+    clones = cmd_clone(src, n, os.path.join(out_dir, "clones"), hooks, seed, cover_top)
     # Жадный отбор: каждый клон сравниваем с исходником, прошлыми клонами и уже принятыми из этой пачки.
     print("\nПроверка уникальности (против исходника, прошлых клонов и принятых из этой пачки):")
     report, accepted = [], []
@@ -427,6 +473,7 @@ def main() -> None:
     c.add_argument("--out", default="work/clones")
     c.add_argument("--hook", action="append", default=[], help="хук на первые 3 с; можно несколько — по одному на клон")
     c.add_argument("--seed", type=int)
+    c.add_argument("--cover-top", action="store_true", help="размыть старый хук сверху в исходнике на первые 3 с")
     k = sub.add_parser("check", help="уникальность 1–10 против исходника и прошлых клонов")
     k.add_argument("file")
     k.add_argument("--against", nargs="+", required=True)
@@ -437,16 +484,17 @@ def main() -> None:
     r.add_argument("--hook", action="append", default=[])
     r.add_argument("--against", nargs="*", default=[], help="прошлые клоны этого источника (файлы или папки)")
     r.add_argument("--seed", type=int)
+    r.add_argument("--cover-top", action="store_true", help="размыть старый хук сверху в исходнике на первые 3 с")
     a = ap.parse_args()
     try:
         if a.cmd == "fetch":
             cmd_fetch(a.ref, a.out)
         elif a.cmd == "clone":
-            cmd_clone(a.src, a.n, a.out, a.hook, a.seed)
+            cmd_clone(a.src, a.n, a.out, a.hook, a.seed, a.cover_top)
         elif a.cmd == "check":
             cmd_check(a.file, a.against)
         else:
-            cmd_run(a.ref, a.n, a.out, a.hook, a.against, a.seed)
+            cmd_run(a.ref, a.n, a.out, a.hook, a.against, a.seed, a.cover_top)
     except RuntimeError as e:
         die(str(e))
 
